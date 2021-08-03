@@ -1,0 +1,2409 @@
+//
+// TODO :
+// - remove zmodeler ( hide imm)
+// - remove Flash polyframe display
+// - remove wheel control on subtool,do nothing, brush size ( keep set1,set2)
+
+
+
+
+[VarSet, DEBUG, 0]
+//ZFileUtils test zscript for ZBrush 4R7 by Marcus Civis - February 2015
+//The ZFileUtils.DLL, ZFileUtils64.DLL, ZFileUtils.lib and ZFileUtils64.lib 
+//are provided 'as is' with no warranty of any kind - use at your own risk!
+
+//load this file through the ZScript:Load button
+//then press 'H' so that the buttons are visible at the bottom of the ZBrush interface
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//~~~VARIABLES
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+[VarDef,isMac,0]//do we have a Mac or PC
+[VarDef,Zvers,0]//ZBrush version
+[VarDef,dllPath,""]//plugin DLL path
+[VarDef,dllVersion,0]//plugin DLL version
+[VarDef,err,0]//standard error
+[VarDef,folderName,""]//folder path/name
+[VarDef,fileName,""]//file path/name
+[VarDef,copyFileName, ""]// Name of file to copy to
+
+//[VarDef,fileCount, 0]// Number of files loaded -- unused
+//[VarSet,index,0] //seems unused
+
+//[VarDef,gSharedPath,""] //path to shared/public MyPluginData folder
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//~~~ROUTINES
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//The CheckSystem routine is a standard routine to make sure everything is as it should be. 
+//You need to call it at the beginning of each button to make sure that the 'dllPath' variable is defined
+//If you don't get any errors but the code isn't working you probably forgot to call this!
+//The CheckSystem routine is a standard routine to make sure everything is as it should be. 
+//Call it whenever the plugin is reloaded
+[RoutineDef, CheckSystem,	
+	//check ZBrush version
+	[VarSet,Zvers,[ZBrushInfo,0]]
+	[If,[Val,Zvers] >= 4.7,,		
+		[Note,"\Cff9923This zscript\Cffffff is not designed for this version of \Cff9923ZBrush\Cffffff.",,3,4737096,,300]
+		[Exit]
+	]	
+	[VarSet,isMac, [ZBrushInfo,6]]	//check Mac or PC
+	// Make sure we have the dll and set its path
+	[If,[ZBrushInfo,16]==64,//64 bit
+		[If,isMac,
+			//use the path below for testing only			
+			//[VarSet,dllPath,"zgametoolsData/ZFileUtils.lib"]	
+			//use the path below for installed plugins
+			[VarSet,dllPath,"ZBRUSH_ZSTARTUP/ZPlugs64/zCycler_2020/ZFileUtils.lib"]						
+			,	
+			//use the path below for testing only	
+			//[VarSet,dllPath,"zgametoolsData\ZFileUtils64.dll"]
+			//use the path below for installed plugins
+			[VarSet,dllPath,"ZBRUSH_ZSTARTUP\ZPlugs64\zCycler_2020\ZFileUtils64.dll"]		
+		]
+	,//else 32 bit - no longer supported
+		[Note,"\Cff9923This zscript\Cffffff is not designed for this version of \Cff9923ZBrush\Cffffff.",,3,4737096,,300]
+		[Exit]
+	]
+	[If, [FileExists, [Var,dllPath]],
+		//check that correct version
+		[VarSet, dllVersion, [FileExecute, [Var,dllPath], Version]]
+		[If, [Val,dllVersion] >= 4.7,//dll version
+			//OK
+			,//else earlier version			
+			[Note,"\Cff9923Note :\Cc0c0c0 The \Cff9923 ZFileUtils plugin \CffffffDLL\Cc0c0c0 is an earlier version which does not support this plugin.  Please install correct version."]
+			[Exit]
+		]			
+	, // else no DLL.
+		[Note,"\Cff9923Note :\Cc0c0c0 The \Cff9923 ZFileUtils plugin \CffffffDLL\Cc0c0c0 could not be found at the correct location.  Please re-install the plugin, making sure the relevant files and folders are in the \CffffffZStartup/ZPlugs\Cc0c0c0 folder."]
+		[Exit]
+	]
+]//end routine
+
+
+[VarDef, nk_cy_uiStatesMem, "zCycler_2020/data/uistates.zvr"]
+
+
+//   Switch startup
+// ZBrush start memblock values
+[If,[MemGetSize,nk_cy_uiSwitchesState],,    
+ 
+    [If, [FileExists,nk_cy_uiStatesMem],
+        [MemCreateFromFile,nk_cy_uiSwitchesState, nk_cy_uiStatesMem,]
+		//[Note, "uistate exists!",,1]
+		,//else
+        [MVarDef,nk_cy_uiSwitchesState,24,0]
+       
+        //Define Default Settings :
+		// Preferences Slots
+        
+		[MVarSet,nk_cy_uiSwitchesState,0,1] // Enable Cycler
+		[MVarSet,nk_cy_uiSwitchesState,1,0] // dynamic
+		[MVarSet,nk_cy_uiSwitchesState,2,0] // reset current brush
+		[MVarSet,nk_cy_uiSwitchesState,3,0] // User Mode Brush
+		
+		[MVarSet,nk_cy_uiSwitchesState,4,0] // Paint  mode
+		[MVarSet,nk_cy_uiSwitchesState,5,0] // Sculpt Mode
+
+
+        [MVarSet,nk_cy_uiSwitchesState,6,1] // a.dsize
+        [MVarSet,nk_cy_uiSwitchesState,7,1] // a.fshift
+		[MVarSet,nk_cy_uiSwitchesState,8,1] // a.z int
+		[MVarSet,nk_cy_uiSwitchesState,9,1] // a.rgb int
+
+		[MVarSet,nk_cy_uiSwitchesState,10,0] // a.alpha
+		[MVarSet,nk_cy_uiSwitchesState,11,0] // a.stroke
+		[MVarSet,nk_cy_uiSwitchesState,12,0] // a.wrap mode
+
+		[MVarSet,nk_cy_uiSwitchesState,13,0] // Brush Set 01
+		[MVarSet,nk_cy_uiSwitchesState,14,0] // brush set 02
+		[MVarSet,nk_cy_uiSwitchesState,15,0] // Symmetry Syncing ( modeling tools)
+		// remove those
+		[MVarSet,nk_cy_uiSwitchesState,5,0] // Rgb
+		[MVarSet,nk_cy_uiSwitchesState,6,0] // m
+		[MVarSet,nk_cy_uiSwitchesState,7,0] // MRgb
+		[MVarSet,nk_cy_uiSwitchesState,8,1] // zadd
+		[MVarSet,nk_cy_uiSwitchesState,9,0] // zsub
+
+		
+	]
+	
+]
+[RoutineDef,UIStateToFile,
+    //Store Memory to File
+    [MemSaveToFile,nk_cy_uiSwitchesState, nk_cy_uiStatesMem,1]//save file
+]//Routine UIStateToFile
+
+[RoutineDef,DeleteUIStateMem,
+    //Store Memory to File
+    [MemDelete,nk_cy_uiSwitchesState]
+]
+//Startup Routine
+[RoutineDef,Startup,
+    [VarDef,StartupWinID,0]
+    [VarDef,idx,100]
+    [IFreeze,
+        [If,[IExists,"Zplugin:zCycler Pro:Cycler Logo"],
+            [VarSet,StartupWinID,[IGet,"Preferences:Utilities:View Window Id"]]
+            
+			[Loop,1,
+				[If,StartupWinID==[IGetID,"Zplugin:zCycler Pro:Cycle On"],[VarSet,idx,0][LoopExit]]
+				[If,StartupWinID==[IGetID,"Zplugin:zCycler Pro:a.DSize"],[VarSet,idx,1][LoopExit]]
+				[If,StartupWinID==[IGetID,"Zplugin:zCycler Pro:a.FShift"],[VarSet,idx,2][LoopExit]]
+				[If,StartupWinID==[IGetID,"Zplugin:zCycler Pro:a.Z Int"],[VarSet,idx,3][LoopExit]]
+				[If,StartupWinID==[IGetID,"Zplugin:zCycler Pro:a.RGB Int"],[VarSet,idx,4][LoopExit]]				
+				[If,StartupWinID==[IGetID,"Zplugin:zCycler Pro:a.Alpha"],[VarSet,idx,10][LoopExit]]
+				[If,StartupWinID==[IGetID,"Zplugin:zCycler Pro:a.Wrap"],[VarSet,idx,11][LoopExit]]
+				[If,StartupWinID==[IGetID,"Zplugin:zCycler Pro:a.R"],[VarSet,idx,12][LoopExit]]
+				[If,StartupWinID==[IGetID,"Zplugin:zCycler Pro:a.D"],[VarSet,idx,13][LoopExit]]
+				[If,StartupWinID==[IGetID,"Zplugin:zCycler Pro:a.Stroke"],[VarSet,idx,14][LoopExit]]
+				[If,StartupWinID==[IGetID,"Zplugin:zCycler Pro:a.U"],[VarSet,idx,15][LoopExit]]
+				[If,StartupWinID==[IGetID,"Zplugin:zCycler Pro:a.Paint"],[VarSet,idx,16][LoopExit]]
+				[If,StartupWinID==[IGetID,"Zplugin:zCycler Pro:a.Sculpt"],[VarSet,idx,17][LoopExit]]
+				//disable at the moment
+				[If,StartupWinID==[IGetID,"Zplugin:zCycler Pro:Set 01"],[VarSet,idx,18][LoopExit]]
+				[If,StartupWinID==[IGetID,"Zplugin:zCycler Pro:Set 02"],[VarSet,idx,19][LoopExit]]
+				[If,StartupWinID==[IGetID,"Zplugin:zCycler Pro:a.SymSync"],[VarSet,idx,16][LoopExit]]
+			]//end loop
+            [If,idx != 100,
+                [If,[MVarGet,nk_cy_uiSwitchesState,idx]==0,
+                    [MVarSet,nk_cy_uiSwitchesState,idx,1]
+					,  
+                    [MVarSet,nk_cy_uiSwitchesState,idx,0]
+					
+                ]   //end if
+            ]//end if
+        ]//end if
+    ]//end freeze
+]//Routine Startup	
+
+[RoutineDef, SetupUI,
+	[If, [IGet, "Zplugin:zCycler Pro:Cycle On"],
+		[RoutineCall, EnableCycleUI]
+		,//else
+		[RoutineCall, DisableCycleUI]
+	]
+]
+[RoutineDef, DisableCycleUI,
+	[IDisable, "zplugin:zcycler pro:a.D"]
+	[IDisable, "zplugin:zcycler pro:a.R"]
+	[IDisable, "zplugin:zcycler pro:a.U"]
+	[IDisable, "zplugin:zcycler pro:a.Paint"]
+	[IDisable, "zplugin:zcycler pro:a.Sculpt"]
+	[IDisable, "zplugin:zcycler pro:a.DSize"]
+	[IDisable, "zplugin:zcycler pro:a.FShift"]
+	[IDisable, "zplugin:zcycler pro:a.Z Int"]
+	[IDisable, "zplugin:zcycler pro:a.RGB Int"]
+	[IDisable, "zplugin:zcycler pro:a.Alpha"]
+	[IDisable, "zplugin:zcycler pro:a.Stroke"]
+	[IDisable, "zplugin:zcycler pro:a.Wrap"]
+	[IDisable, "zplugin:zcycler pro:save user brush"]
+]
+[RoutineDef, EnableCycleUI,
+	[IEnable, "zplugin:zcycler pro:a.D"]
+	[IEnable, "zplugin:zcycler pro:a.R"]
+	[IEnable, "zplugin:zcycler pro:a.U"]
+	[IEnable, "zplugin:zcycler pro:a.Paint"]
+	[IEnable, "zplugin:zcycler pro:a.Sculpt"]
+	[IEnable, "zplugin:zcycler pro:a.DSize"]
+	[IEnable, "zplugin:zcycler pro:a.FShift"]
+	[IEnable, "zplugin:zcycler pro:a.Z Int"]
+	[IEnable, "zplugin:zcycler pro:a.RGB Int"]
+	[IEnable, "zplugin:zcycler pro:a.Alpha"]
+	[IEnable, "zplugin:zcycler pro:a.Stroke"]
+	[IEnable, "zplugin:zcycler pro:a.Wrap"]
+	[IEnable, "zplugin:zcycler pro:save user brush"]
+]
+[RoutineDef, SetEnableSwitches,
+	[IEnable, "Zplugin:zCycler Pro:Cycle On"]
+	
+	[IEnable, "Zplugin:zCycler Pro:a.D"]
+	
+	[IEnable, "Zplugin:zCycler Pro:a.DSize"]
+	[IEnable, "Zplugin:zCycler Pro:a.FShift"]
+	[IEnable, "Zplugin:zCycler Pro:a.Z Int"]	
+	[IEnable, "Zplugin:zCycler Pro:a.RGB Int"]
+
+	// [IEnable, "Zplugin:zCycler Pro:a.Rgb"]
+	// [IEnable, "Zplugin:zCycler Pro:a.M"]
+	// [IEnable, "Zplugin:zCycler Pro:a.MRgb"]
+	// [IEnable, "Zplugin:zCycler Pro:a.zAdd"]
+	// [IEnable, "Zplugin:zCycler Pro:a.zSub"]
+	
+	[IEnable, "Zplugin:zCycler Pro:a.Alpha"]
+	[IEnable, "Zplugin:zCycler Pro:a.Wrap"]
+	[IEnable, "Zplugin:zCycler Pro:a.R"]
+	[IEnable, "Zplugin:zCycler Pro:a.Stroke"]
+
+	[IEnable, "Zplugin:zCycler Pro:a.U"]
+	[IEnable, "Zplugin:zCycler Pro:a.Paint"]
+	[IEnable, "Zplugin:zCycler Pro:a.Sculpt"]
+
+//disable at the moment 
+
+	// [IEnable, "Zplugin:zCycler Pro:a.SymSync"]
+	[IEnable, "Zplugin:zCycler Pro:Set 01"]
+	[IEnable, "Zplugin:zCycler Pro:Set 02"]
+	// [IEnable, "zplugin:zcycler pro:Zoom"]
+	// [IEnable, "Zplugin:zCycler Pro:Subtools"]
+	// [IEnable, "Zplugin:zCycler Pro:Do Nothing"]
+	// [IEnable, "Zplugin:zCycler Pro:Brush Size"]
+
+]
+
+[RoutineCall, CheckSystem]
+
+//OLD ROUTINE For Debug
+
+// [RoutineDef, CycleBrush,
+
+// 	[VarDef, brushCycle(2)]//, ""]
+
+// 	//[RoutineCall, AssignPair]
+
+// 	//DEBUG
+// 	//[Note, brushPairPath]
+// 	[VarSet, brushPairPath, [FileNameResolvePath, "zCycler_2020/data/brushCycle.zvr"]]//brushPairPath]]
+// 	[VarSet, brush,[IGetTitle, "Brush:Current Brush", 1]]
+// 	[VarSet, brushSize, [IGet, "Draw:Draw Size"]]
+// 	//[note, brushSize]//DEBUG
+// 	[If, ( [FileExists,brushPairPath] == 0 )
+// 		,//Cmds
+// 		[VarSet, brushCycle(0),brush]
+// 		[VarSet, brushCycle(1),brushSize]
+// 		[VarSave, brushCycle, brushPairPath]
+// 		,//else
+// 		[VarLoad, brushCycle, brushPairPath]
+// 	]
+	
+// 	//[VarLoad, brushCycle, brushPairPath]
+	
+// 	[If, ( [StrFind, brush, brushCycle(0)] == 1 )
+// 		,//cmds	
+// 		[IPress, brushCycle(0)]
+// 		,//else
+// 		//[Note, "it doesn't match, we Save the current brush..."]			
+// 		//[Note, brushCycle]
+// 		[If, ( [IExists, brushCycle(0)] = 0 )
+// 			,//cmds
+// 			[IPress, "Brush:Standard"]
+// 			,//else
+// 			[IPress, brushCycle(0)]
+// 			[ISet, "Draw:Draw Size", brushCycle(1)]
+// 		]			
+// 		[VarSet, brushCycle(0),brush]
+// 		[VarSet, brushCycle(1),brushSize]
+// 		[VarSave, brushCycle, brushPairPath]
+// 	]	
+// ]
+
+
+//sleep mode
+[VarDef, cycle1, 0]
+[VarDef, cycle2, 0]
+
+
+//[VarDef, cycle1, [IGetID, "Zplugin:zCycler Pro:Cycle Brush"]]
+//[VarDef, cycle2, [IGetID, "Zplugin:zCycler Pro:Cycle Brush UI"]]
+
+[VarDef, nk_cy_brushpath, "zCycler_2020/data/brushCycleStates.zvr"]
+
+
+// ######## Switch startup #########
+// ZBrush start memblock values
+[If,[MemGetSize,nk_cy_Brush],,    
+ 
+    [If, [FileExists,nk_cy_brushpath],
+        [MemCreateFromFile,nk_cy_Brush, nk_cy_brushpath,]
+		,//else
+        [MVarDef,nk_cy_Brush,5,0]//create memblock
+		//define default brushes
+
+       	[MVarSet,nk_cy_Brush,0,127]//standard brush
+        [MVarSet,nk_cy_Brush,1,[IGet, "Draw:Draw Size"]]//brush size
+        [MVarSet,nk_cy_Brush,2,116]//smooth brush 
+		[MVarSet,nk_cy_Brush,3,83]//mask brush
+		[MVarSet,nk_cy_Brush,4,103]//visibility Lasso
+
+	]
+]
+
+[RoutineDef,BrushStateToFile,
+    //Store Memory to File
+    [MemSaveToFile,nk_cy_Brush, nk_cy_brushpath,1]//save file
+]
+
+[RoutineDef, UpdateCycler,
+
+	[VarSet,shiftStr,""]
+	[VarSet,ctrlStr,""]
+	[VarSet,altStr,""]
+
+	//[Note, [StrMerge, "Hello ?! \nWin Id is : ", winId]]
+	
+	[VarSet, brushSize, [IGet, "Draw:Draw Size"]]
+	
+	[VarSet, tempBrush,0]
+	[VarSet, tempKey,0]
+
+	//DEBUG 
+	//	[Note, "Is dual brush Cycle action !",,.5]
+	//[Note, curBrush,,1]
+	[If, (keyOnMouseDown&256 == 256) && (keyOnMouseDown&512 == 512) && (keyOnMouseDown&1024 != 1024) 
+		,//cmds
+		// [Note, "CTRL+SHIFT !!!",,1]
+		//collect the brush in memory first before we loose it
+		[VarSet, tempBrush,[MVarGet,nk_cy_Brush,4]]
+		//Set the new brush ID value
+		[VarSet, tempKey, [IGet,"Brush:Item Info"]]
+		[MVarSet, nk_cy_Brush, 4, tempKey]//lasso ( visibility )
+		//save mem on disk
+		[RoutineCall,BrushStateToFile]
+		//then grab the 
+		[ISet, "Brush:Item Info", tempBrush]
+
+	]
+
+	[If,(keyOnMouseDown&256 == 256) && (keyOnMouseDown&512 != 512) && (keyOnMouseDown&1024 != 1024) 
+		,//cmds
+		//DEBUG 
+		[VarSet,shiftStr,"SHIFT-"]
+		// [Note, "SHIFT !!!",,1]
+		//collect the brush in memory first before we loose it
+		[VarSet, tempBrush,[MVarGet,nk_cy_Brush,2]]
+		//Set the new brush ID value 
+		//[VarSet, tempKey, [IKeyPress, SHIFT,[IGet,"Brush:Item Info"]]]
+		[VarSet, tempKey, [IGet,"Brush:Item Info"]]
+		[MVarSet, nk_cy_Brush, 2, tempKey]//SMooth
+		
+		//save mem on disk
+		[RoutineCall,BrushStateToFile]
+		//then grab the 
+		[ISet, "Brush:Item Info", tempBrush]
+
+	]
+	[If,(keyOnMouseDown&256 != 256) && (keyOnMouseDown&1024 != 1024) && (keyOnMouseDown&512 == 512) 
+		,//cmds
+		//DEBUG
+		[VarSet,ctrlStr,"CTRL-"]
+		// [Note, "CTRL !!!",,1]
+		//collect the brush in memory first before we loose it
+		[VarSet, tempBrush,[MVarGet,nk_cy_Brush,3]]
+		//Set the new brush ID value 
+		//[VarSet, tempKey, [IKeyPress, CTRL,[IGet,"Brush:Item Info"]]]
+		[VarSet, tempKey, [IGet,"Brush:Item Info"]]
+		[MVarSet, nk_cy_Brush, 3, tempKey]//Mask
+		//save mem on disk
+		[RoutineCall,BrushStateToFile]
+		//then grab the 
+		[ISet, "Brush:Item Info", tempBrush]
+
+	]
+
+	[If,(keyOnMouseDown&1024 == 1024) && (keyOnMouseDown&256 != 256) && (keyOnMouseDown&512 != 512)
+		,//cmds
+		//DEBUG
+		[VarSet,altStr,"ALT"]
+		// [Note, "ALT !!!",,1]
+		//shoould not be necessary 
+		//[IKeypress, ALT, ]
+	]
+
+
+	// do not work without Sleep mode
+	// [VarSet, keystate, ""]
+	// [If,([IGet, "preferences:utilities:Ctrl"])
+	// 	,//cmds
+	// 	//DEBUG
+	// 	[VarSet, keystate,"CTRL-"]
+	// 	[If,[IGet, "preferences:utilities:Shift"]
+	// 		,//cmds
+	// 		[VarSet, keystate,"CTRL+SHIFT"]
+
+	// 	]
+	// 	//shoould not be necessary 
+	// 	//[IKeypress, ALT, ]
+	// ]
+	// [If,([IGet, "preferences:utilities:Shift"])
+	// 	,//cmds
+	// 	//DEBUG
+	// 	[VarSet,keystate,"Shift only"]
+	// 	//shoould not be necessary 
+	// 	//[IKeypress, ALT, ]
+	// ]
+	// [If,([IGet, "preferences:utilities:Alt"])
+	// 	,//cmds
+	// 	//DEBUG
+	// 	[VarSet,keystate,"Alt only"]
+	// 	//shoould not be necessary 
+	// 	//[IKeypress, ALT, ]
+	// ]
+	// [varSet, null, [StrLength, keystate]]
+	// [If, ([StrLength, null] != 0 )
+	// 	,//cmds
+	// 	//do nothing
+	// 	[Note, keystate,,5]
+	// ]
+	[If, ((keyOnMouseDown&256 != 256) && (keyOnMouseDown&512 != 512) && (keyOnMouseDown&1024 != 1024))
+	//[If,([StrLength,shiftStr]== 0)&&([StrLength,ctrlStr]== 0)&&([StrLength,altStr]== 0)
+		,//cmds
+		//DEBUG
+		//[Note, "No modifier keys"]
+		
+		//collect the brush in memory first before we loose it
+		[VarSet, tempBrush,[MVarGet,nk_cy_Brush,0]]
+		[VarSet, tempSize,[MVarGet,nk_cy_Brush,1]]
+		//DEBUG
+		//[Note, [StrMerge, "Switch to brush ID: ", tempBrush],,.1]
+		//[Note, [StrMerge, "Switch to Draw Size : ", tempSize],,.1]
+		
+		//Set the new brush ID value 
+		[MVarSet, nk_cy_Brush, 0, [IGet,"Brush:Item Info"]]//Mask
+		[MVarSet, nk_cy_Brush, 1, [IGet,"Draw:Draw Size"]]//Mask
+		
+		//DEBUG
+		//[Note, [StrMerge, "Saved brush ID: ", tempBrush],,.1]
+		//[Note, [StrMerge, "Saved Draw Size : ", tempSize],,.1]
+		
+		//save mem on disk
+		[RoutineCall,BrushStateToFile]
+		//then grab the 
+		[ISet, "Brush:Item Info", tempBrush]
+		[ISet, "Draw:Draw Size", tempSize]
+		
+
+	]
+
+	//DEBUG
+//	[Note,[StrMerge,shiftStr,ctrlStr,altStr," pressed"],,.5]
+
+	//clear status
+	[IKeyPress,13,[IPress,"Preferences:Utilities:View keyboard status"]]
+
+
+]
+
+
+[VarDef, keyOnMouseDown,0]
+[VarDef, curBrush,0]
+[VarDef, dynWinId,0]
+[VarDef, wait,0]
+[VarDef, waitBrush, [IGet, "Brush:Item Info"]]
+
+[RoutineDef, DynamicOn,
+//[Ifreeze,
+
+	[If, ([IGet, "Zplugin:zCycler Pro:Cycle On"] == 0 )
+		,//cmds
+		//then Exit
+		[Exit]
+	]
+	
+	[VarSet,shiftStr,""]
+	[VarSet,ctrlStr,""]
+	[VarSet,altStr,""]
+
+	//DEBUG 
+//	[Note, [StrMerge, "LButton Down on window ID :" ,winId],,.5]
+//	[Note, [StrMerge, "temp winID : ", dynWinId],,.5]
+
+	[If, (winId == dynWinId)
+		,//cmds
+		//DEBUG 
+		//[Note, "WindID Matchs !",,.5]
+		//[Note, curBrush,,1]
+		[If,(keyOnMouseDown&256 == 256),
+			//DEBUG 
+			[VarSet,shiftStr,"SHIFT-"]
+			[IKeypress, SHIFT,
+				[IModSet, "Draw:Draw Size", [IGet, "ZPlugin:zCycler Pro:a.D"]]
+				[If, ( [IModGet, "Draw:Draw Size"] != [IGet, "ZPlugin:zCycler Pro:a.D"] )
+					,//cmds
+				//	[Note, "Need to Resync",,1]
+										
+				]
+			]
+
+		]
+		[If,(keyOnMouseDown&512 == 512),
+			//DEBUG
+			[VarSet,ctrlStr,"CTRL-"]
+			[IKeypress, CTRL,
+				[IModSet, "Draw:Draw Size", [IGet, "ZPlugin:zCycler Pro:a.D"]]
+				[If, ( [IModGet, "Draw:Draw Size"] != [IGet, "ZPlugin:zCycler Pro:a.D"] )
+					,//cmds
+				//	[Note, "Need to Resync",,1]
+				]
+			]
+		]
+
+		// [If,(keyOnMouseDown&1024 == 1024),
+		// 	//DEBUG
+		// 	//[VarSet,altStr,"ALT"]
+		// 	[SleepAgain]
+		// ]
+
+		[If,([StrLength,shiftStr]== 0)&&([StrLength,ctrlStr]== 0)&&([StrLength,altStr]== 0),
+			//DEBUG
+			[VarSet,altStr,"No modifier keys"]
+
+			[IModSet, "Draw:Draw Size", [IGet, "ZPlugin:zCycler Pro:a.D"]]
+			[If, ( [IModGet, "Draw:Draw Size"] != [IGet, "ZPlugin:zCycler Pro:a.D"] )
+				,//cmds
+			//	[Note, "Need to Resync",,1]
+			]
+		]
+		//DEBUG
+		//[Note,[StrMerge,shiftStr,ctrlStr,altStr," pressed"],,.5]
+
+		//clear status
+		[IKeyPress,13,[IPress,"Preferences:Utilities:View keyboard status"]]
+	]
+//]//end Freeze
+]
+
+[RoutineDef, DynamicOff,
+//[IFreeze,
+	[VarSet,shiftStr,""]
+	[VarSet,ctrlStr,""]
+	[VarSet,altStr,""]
+//	[Note, "Off!",,0.1]
+//	[VarSet, dynWinId, [IGetID, "Zplugin:zCycler Pro:a.D"]]
+	
+	[If, ([IGet, "Zplugin:zCycler Pro:Cycle On"] == 0 )
+		,//cmds
+		//then Exit
+		[Exit]
+	]
+
+
+	//DEBUG 
+//	[Note, [StrMerge, "LButton Down on window ID :" ,winId],,.5]
+//	[Note, [StrMerge, "temp winID",dynWinId],,.5]
+	[If, (winId == dynWinId)
+		,//cmds
+		//DEBUG 
+		//[Note, "winID Matchs !",,.5]
+		//[Note, curBrush,,1]
+		[If,(keyOnMouseDown&256 == 256),
+			//DEBUG 
+			[VarSet,shiftStr,"SHIFT-"]
+			[IKeypress, SHIFT, 
+				[IModSet, "Draw:Draw Size", [IGet, "ZPlugin:zCycler Pro:a.D"]]
+				[If, ( [IModGet, "Draw:Draw Size"] != [IGet, "ZPlugin:zCycler Pro:a.D"] )
+					,//cmds
+				//	[Note, "Need to Resync",,1]
+				]
+			]
+
+		]
+		[If,(keyOnMouseDown&512 == 512),
+			//DEBUG
+			[VarSet,ctrlStr,"CTRL-"]
+			[IKeypress, CTRL, 
+				[IModSet, "Draw:Draw Size", [IGet, "ZPlugin:zCycler Pro:a.D"]]
+				[If, ( [IModGet, "Draw:Draw Size"] != [IGet, "ZPlugin:zCycler Pro:a.D"] )
+					,//cmds
+				//	[Note, "Need to Resync",,1]
+				]
+			]
+		]
+
+
+		// [If,(keyOnMouseDown&1024 == 1024),
+		// 	//DEBUG
+		// 	//[VarSet,altStr,"ALT"]
+		// 	[SleepAgain]
+		// ]
+
+		[If,([StrLength,shiftStr]== 0)&&([StrLength,ctrlStr]== 0)&&([StrLength,altStr]== 0),
+			[VarSet,altStr,"No modifier keys"]
+			[IModSet, "Draw:Draw Size", [IGet, "ZPlugin:zCycler Pro:a.D"]]
+			[If, ( [IModGet, "Draw:Draw Size"] != [IGet, "ZPlugin:zCycler Pro:a.D"] )
+				,//cmds
+				[Note, "Need to Resync",,1]
+			]
+		]	
+		//DEBUG
+		//[Note,[StrMerge,shiftStr,ctrlStr,altStr," pressed"],,.1]
+
+		//clear status
+		[IKeyPress,13,[IPress,"Preferences:Utilities:View keyboard status"]]
+	]// if dynWinId= winid
+
+//]//end IFreeze
+]
+
+
+[RoutineDef, UpdateDynamic,
+	//[Note, [StrMerge, "brushID : ",[IGet,"Brush:Item Info"]],,.1]
+	[VarSet,shiftStr,""]
+	[VarSet,ctrlStr,""]
+	[VarSet,altStr,""]
+	[If,(keyOnMouseDown&256 == 256),
+		//DEBUG 
+		[VarSet,shiftStr,"SHIFT-"]
+	
+		[If, curBrush != [IGet,"Brush:Item Info"]
+				,//cmds
+			[IKeypress, SHIFT, 
+				[IModSet, "Draw:Draw Size",[Iget, "Zplugin:zCycler Pro:a.D"]]
+			]				
+				
+			//[Note, "SHIFT - Update Dynamic !",,1]
+
+		]
+	]
+	[If,(keyOnMouseDown&512 == 512),
+		//DEBUG
+		[VarSet,ctrlStr,"CTRL-"]
+
+		[If, curBrush != [IGet,"Brush:Item Info"]
+			,//cmds
+			//[IModSet, "Draw:Draw Size",[Iget, "Zplugin:zCycler Pro:a.D"]]
+			[IKeypress, CTRL, 
+				[IModSet, "Draw:Draw Size",[Iget, "Zplugin:zCycler Pro:a.D"]]
+
+			]
+		//	[Note, "CTRL - Update Dynamic !",,1]
+		]
+	]
+
+
+	// [If,(keyOnMouseDown&1024 == 1024),
+	// 	//DEBUG
+	// 	//[VarSet,altStr,"ALT"]
+	// 	[SleepAgain]
+	// ]
+
+	[If,([StrLength,shiftStr]== 0)&&([StrLength,ctrlStr]== 0)&&([StrLength,altStr]== 0),
+	//	[VarSet,altStr,"No modifier keys"]
+
+		[If, curBrush != [IGet,"Brush:Item Info"]
+				,//cmds
+				[IModSet, "Draw:Draw Size",[Iget, "Zplugin:zCycler Pro:a.D"]]
+
+		]
+	]	
+	//[Note,[StrMerge,shiftStr,ctrlStr,altStr," pressed"],,.1]
+	//clear status
+	[IKeyPress,13,[IPress,"Preferences:Utilities:View keyboard status"]]
+	
+]
+
+// on my local install 16907 Artmature Brush when zsphere mode is active
+// as reference Blob Brush ID = 16908
+[VarDef, startBrush, [IGetID, "Brush:Blob"]]
+[VarDef, endBrush, ( startBrush + 255 ) ] //old value 192
+// on-the-fly method
+[VarDef, curBrushWinId, [IGetID, "Brush:Current Brush"]]
+[VarDef, zModelerWinId, [IGetID, "Brush:ZModeler"]]
+
+
+[RoutineDef, CheckBrushType,
+
+	[VarSet, brushName,[IGetTitle, "Brush:Current Brush", 1]]
+	[VarSet, brushName,[StrExtract, brushName, 6 ,128]]//we remove "Brush:"
+	
+	//First Big Step : We check if the brush is a user brush..
+	[VarSet, checkup,[StrExtract, brushName,0,1]]//we keep only the two first letters in cause It returns "uU" or "uu"
+	[VarSet, preffix,[StrExtract, brushName,0,0]]//we keep only the first letter
+	//[Note, [Strmerge, "checkup : ", checkup, "\n preffix : ", preffix]]
+
+	[If,( [StrFind, "uu", checkup] == 0 )
+		,//cmds
+		[Note, "UU Event"]
+		,//else
+		//Debug
+		//[Note, "continue.."]
+	]
+	[If,( [StrFind, "u", preffix] == 0 )
+		,//cmds
+		//[Note, [StrMerge, "Seems to be a user brush, double check if : ", brushName, " exists on the disk.."]]
+
+		[VarSet, userBrushPath, [StrMerge, "zCycler_2020/user/brushes/", brushName, ".ZBP"]]
+		[VarSet, userBrushPath, [FileNameResolvePath, userbrushPath]]
+		[If, ( [FileExists, userBrushPath] == 1 )
+			,//cmds
+			// [Note, "The file Exists, then it's definitively a user brush !"]
+			//do not tag the saved brush name
+			[ISet, "zplugin:zCycler Pro:a.U",1]
+			,//else
+			//we need to tag the new brush name
+
+		]
+		,//else
+		//[Note, "IS a default Brush"]
+		[ISet, "zplugin:zCycler Pro:a.U", 0]
+	]
+]
+
+[RoutineDef, SaveUserBrush,
+
+	[VarSet, brushName,[IGetTitle, "Brush:Current Brush", 1]]
+	[VarSet, brushName,[StrExtract, brushName, 6 ,128]]//we remove "Brush:"
+	
+	[VarSet, bfileName, ""]
+
+	//First Big Step : We check if the brush is a user brush..
+	[VarSet, checkup,[StrExtract, brushName,0,1]]//we keep only the two first letters in cause It returns "uU" or "uu"
+	[VarSet, preffix,[StrExtract, brushName,0,0]]//we keep only the first letter
+	//[Note, [Strmerge, "checkup : ", checkup, "\n preffix : ", preffix]]
+
+	[If,( [StrFind, "uu", checkup] == 0 )
+		,//cmds
+		[Note, "UU Event"]
+		,//else
+		//Debug
+		//[Note, "continue.."]
+	]
+	[If,( [StrFind, "u", preffix] == 0 )
+		,//cmds
+		//[Note, [StrMerge, "Seems to be a user brush, double check if : ", brushName, " exists on the disk.."]]
+
+		[VarSet, userBrushPath, [StrMerge, "zCycler_2020/user/brushes/", brushName, ".ZBP"]]
+		[VarSet, userBrushPath, [FileNameResolvePath, userbrushPath]]
+		[If, ( [FileExists, userBrushPath] == 1 )
+			,//cmds
+		//	[Note, "The file Exists, then it's definitively a user brush !"]
+			//do not tag the saved brush name
+			[VarSet, bfileName, [StrMerge, "zCycler_2020/user/brushes/", brushName, ".ZBP"]]
+			,//else
+		//	[Note, "the Current Brush isn't a User Brush, then press or Load the User brush now..."]
+			//we need to tag the new brush name
+			[VarSet, bfileName, [StrMerge, "zCycler_2020/user/brushes/u", brushName, ".ZBP"]]
+		]
+		,//else
+		//[Note, "IS a default Brush"]
+		[VarSet, bfileName, [StrMerge, "zCycler_2020/user/brushes/u", brushName, ".ZBP"]]
+	]
+
+	[VarSet, bfileName,[FileNameResolvePath,bfileName]]
+
+	[IPress, "Brush:Clone"]	
+
+
+	//TODO : 
+	// when user brush changes have to be saved
+	// the new user brush brush 
+
+	//DEBUG
+	//[Note, bfileName]
+
+	[If, ( [FileExists, bfileName] == 1 )
+		,//commands
+		//-1 CANCEL
+		// 0 NO
+		// 1 YES
+		[VarSet, overwriteMessage,[MessageYesNoCancel, "The File already Exists, OverWrite ?" ,"Are you sure?"]]
+		[If, ( overWriteMessage = -1 )
+			,//commands
+			[Ikeypress, 110]
+			[Exit]
+		]
+		[If, ( overWriteMessage = 0 )
+			,//commands
+			[VarSet, bfileName, [FileNameAsk,"Brush File(*.zbp)|*.zbp||",brushName ,"Please rename Brush File..."]]
+			[Exit]
+		]
+		[If, ( overWriteMessage = 1 )
+			,//commands
+			[VarSet, err, [FileExecute, [Var,dllPath],"FileDelete", bfileName]] // Delete this file...
+			[If,err
+				,
+				[Note,"An error occurred.",,2]
+				,//else
+				//[Note,"File deleted",,2] //debug
+					
+			]			
+			
+		]
+		//,//else
+		//[Note,"No file to delete!",,2]
+	]	
+	
+		
+	//get the path from the Variable on disk
+	[FileNameSetNext, bfileName]
+	[IPress, "Brush:Save As"]
+	[IPress, [StrMerge, "Brush:", brushName]]
+	//set user mode On
+	[ISet, "zplugin:zCycler Pro:a.U",1]
+
+
+]
+
+[RoutineDef, UserToDefaultSwitch2,
+
+	//first we get the current brush
+	[VarSet, brushName, ""]
+	[VarSet, brushName,[IGetTitle, "Brush:Current Brush", 1]]
+	[VarSet, brushName,[StrExtract, brushName, 6 ,128]]//we remove "Brush:"
+	//DEbug
+	//[Note, [StrMerge, "brush name is : ", brushName]]
+
+	[VarSet, checkup,[StrExtract, brushName,0,1]]//we keep only the two first letters in cause It returns "uU" or "uu"
+	[VarSet, preffix,[StrExtract, brushName,0,0]]//we keep only the first letter
+
+	//DEBUG
+	//[Note, [Strmerge, "checkup : ", checkup, "\n preffix : ", preffix]]
+
+	// define the user brush name for next comparaison
+	[VarSet, userBrush,""]
+	//[VarSet, userBrush, [StrMerge, "u", brushName]]
+	[VarSet, loadingBrush,""]
+
+	[If,( [StrFind, "uu", checkup] == 0 )
+		,//cmds
+		[Note, "UU Event"]
+		,//else
+		//Debug
+		//[Note, "continue.."]
+	]
+
+	[If,( [StrFind, "u", preffix] == 0 )
+		,//cmds
+		//DEBUG
+		//[Note, [StrMerge, "Seems to be a user brush, double check if : ", brushName, " exists on the disk.."]]
+		[IF, ( [IGet, "zplugin:zcycler:a.U"] == 1 )
+			,//cmds
+			//so if we found a single U in the brush name
+			// we simply skip the process, so the switch get synced with the name
+			// of the current brush.
+			[Exit]
+		]
+		[VarSet, userBrushPath, [StrMerge, "zCycler_2020/user/brushes/", brushName, ".ZBP"]]
+		[VarSet, userBrushPath, [FileNameResolvePath, userbrushPath]]
+		[If, ( [FileExists, userBrushPath] == 1 )
+			,//cmds
+			//DEBUG
+			//[Note, "The file Exists, then it's definitively a user brush !"]
+			
+			
+			// [If, ( [IGet, "zplugin:zCycler Pro:a.U"] == 1 )
+			// 	,//cmds
+			// 	[Iset, "zplugin:zCycler Pro:a.U", 0]
+			// 	,//else
+			// 	[Note, "user brush mode isn't synced !"]
+			// 	[Iset, "zplugin:zCycler Pro:a.U", 0]
+			// ]
+			
+
+			// we trim the first letter of the user brush, to get the default brush name
+			[VarSet, loadingBrush, [StrExtract, brushName, 1,128]]
+			//[Note, [StrMerge, "The User mode is ON, Load the DEfault Brush : ", loadingBrush]]
+
+			[If, ( [IExists, [StrMerge, "Brush:", loadingBrush]] == 1 )
+				,//cmds
+				//DEBUG
+				//[Note, [StrMerge, "The Loading Brush exists in brush section, Press : \n", "Brush:", loadingBrush]]
+
+				[IPress, [StrMerge, "Brush:", loadingBrush]]
+				,//else
+				//DEBUG
+				// [Note, "The Loading Brush exists in zdata directory, Load It..."]
+
+				[VarSet, defaultBrushPath, [StrMerge, "ZBRUSH_ZDATA/BrushPresets/", loadingBrush, ".ZBP"]]
+				[VarSet, defaultBrushPath, [FileNameResolvePath, defaultBrushPath]]
+				//So owe must to load it from the Disk
+				[FileNameSetNext, defaultBrushPath]
+				[IPress, "Brush:Load Brush"]
+
+			]
+			,//else
+			// the brush is a default brush which start by the U letter.
+			[Note, "The user brush do not exist please press Save Brush item"]
+			[ISet, "zplugin:zCycler Pro:a.U", 0]
+			//[Exit]
+
+		]
+		,//else
+		//DEBUG
+		//[Note, "the Current Brush isn't a User Brush, then press or Load the User brush now..."]
+	
+		// [If, ( [IGet, "zplugin:zcycler:a.U"] == 1 )
+		// 	,//cmds
+		// 	//so if we found a single U in the brush name
+		// 	// we simply skip the process, so the switch get synced with the name
+		// 	// of the current brush.
+		// 	[Exit]
+		// ]
+
+
+		[VarSet, userBrushPath, [StrMerge, "zCycler_2020/user/brushes/u", brushName, ".ZBP"]]
+		[VarSet, userBrushPath, [FileNameResolvePath, userbrushPath]]
+		[If, ( [FileExists, userBrushPath] == 1 )
+			,//cmds
+			//DEBUG
+			//[Note, "User Brush File exists!"]
+			
+			// [If, ( [IGet, "zplugin:zCycler Pro:a.U"] == 1 )
+			// 	,//cmds
+			// 	[ISet, "zplugin:zCycler Pro:a.U", 0]
+			// 	//[Note, "user brush mode isn't synced !"]
+			// 	,//else
+			// 	//[Iset, "zplugin:zCycler Pro:a.U", 1]
+			// ]
+			
+
+			[VarSet, loadingBrush, [StrMerge, "Brush:u", brushName]]
+			//[Note, loadingBrush]
+			//we check if the userbrush exist in brush section
+			[If, ( [IExists, loadingBrush] == 1 )
+				,//cmds
+				//DEBUG
+				//[Note, "The User brush exist in Brush Section, Press It.."]				
+				[IPress, loadingBrush]
+				,//else
+				//we must to load it from the Disk
+				[FileNameSetNext, userBrushPath]
+				[IPress, "Brush:Load Brush"]
+
+			]
+
+			// [If, ( [IGet, "zplugin:zCycler Pro:a.U"] == 0 )
+			// 	,//cmds
+			// 	[ISet, "zplugin:zCycler Pro:a.U", 1]
+			// 	,//else
+			// 	[Note, "user brush mode isn't synced !"]
+			// ]
+	
+			,//else
+			// the brush is a default brush which start by the U letter.
+			[Note, "The user brush do not exist please press Save Brush item"]
+			[ISet, "zplugin:zCycler Pro:a.U", 0]
+			//[Exit]
+		]
+	]
+]
+
+[RoutineDef, ToggleWireFrame,
+	[Note, "TODO",,3]
+]
+
+[RoutineDef, SymmetrySyncing,
+
+	// Mode Set
+	// 0=off, 1=X, 2=Y, 3=XY, 4=Z, 5=XZ, 6=YZ, 7=XYZ
+	[If, ( [IGet, "Transform:Activate Symmetry"] == 1 )
+		,//cmds
+		[VarSet, symState, -1]
+		[If, ( [IGet, "Transform:(R)"] == 1 )
+			,//cmds
+			// [Note, "We abort the radial symmetry is on !"]
+			[Exit]
+		]
+
+		[If, ( [IGet, "Transform:>X<"] == 1 )
+			,//cmds
+			//[VarSet, symState, 1]
+			[If, ( [IGet, "Transform:>Y<"] == 1 )
+				,//cmds
+				
+				[If, ( [IGet, "Transform:>Z<"] == 1 )
+					,//cmds
+					[VarSet, symState, 7]
+					,//else
+					//only X +Y are ON
+					[VarSet, symState, 3]
+				]
+				,//else
+				// X is ON but Y is Off
+				[If, ( [IGet, "Transform:>Z<"] == 1 )
+					,//cmds
+					[VarSet, symState, 5]
+					,//else
+					//only X is ON
+					[VarSet, symState, 1]
+
+				]
+
+			]
+			
+			,//else
+			// X is OFF, check is Y is on
+			[If, ( [IGet, "Transform:>Y<"] == 1 )
+				,//cmds
+				//X is Off, and Y is ON
+				
+				[If, ( [IGet, "Transform:>Z<"] == 1 )
+					,//cmds
+					[VarSet, symState, 6] //Z only
+					, //else
+					//X + Y + Z are all OFF
+					[VarSet, symState, 2] //all Off
+				]
+				,//else
+				// x + Y are Off
+				[If, ( [IGet, "Transform:>Z<"] == 1 )
+					,//cmds
+					[VarSet, symState, 4] //Z only
+					, //else
+					//X + Y + Z are all OFF
+					[VarSet, symState, 0] //all Off
+				]
+			]
+
+		]
+
+
+		// Mode Set
+		// 0=off, 1=X, 2=Y, 3=XY, 4=Z, 5=XZ, 6=YZ, 7=XYZ,
+		[IModSet, "Tool:Deformation:Mirror", symState]
+		[IModSet, "Tool:Deformation:Smart ReSym", symState]
+		[IModSet, "Tool:Deformation:ReSym", symState]
+		[IModSet, "Tool:Geometry:Mirror and Weld", symState]
+		[IModSet, "Tool:Geometry:Delete by Symmetry", symState]
+		[IModSet, "Tool:Geometry:Tessimate", symState]
+		[IModSet, "Tool:Subtool:Remesh All", symState]
+	]
+
+]
+
+[RoutineDef, AppendPolyMesh,
+
+	[VarSet,currentTool, [IGet,"Tool:Item Info"]]
+	[VarSet,toolScale, [IGet, "Tool:Geometry:XYZ Size"]]
+	[IPress, "Tool:Polymesh3D"]
+	[IPress, "Tool:Subtool:Copy"]
+	[ISet, "Tool:Item Info", currentTool]
+	[IPress, "Tool:Subtool:Paste"]
+	[IPress, "Tool:Subtool:SelectDown"]
+	[Iset, "Tool:Geometry:XYZ Size", toolScale]
+	[Ipress, "Transform:Move"]
+
+]
+
+
+[RoutineDef, SelectPreviousBrush,
+	// docstring : 
+	// Select Previous Brush when All brushes switch is on.
+	// 
+
+	[Varset, decBrush, [IGet,"Brush:ItemInfo"]]
+	[VarSet, done, 0]
+
+	[If, ( decBrush == 0 ),
+		//[VarDec, decBrush]
+		[VarSet, done, 1]
+	]
+	[If, ( decBrush == 1 ),
+		//[VarSet, decBrush,3]
+		[VarSet, done, 1]
+	]
+	[If, ( decBrush == 3 ),
+		//[Note, "claytubeconstant brush"]
+		[VarSet, decBrush, 1]
+		[VarSet, done, 1]
+	]
+	// [If, ( decBrush == 8 ),
+	// 	//[Note, "claytubeconstant brush"]
+	// 	[VarSet, decBrush, 6]
+	// 	[VarSet, done, 1]
+	// ]
+	[If, ( decBrush == 16 ),
+		[VarSet, decBrush, 10]
+		[VarSet, done, 1]
+	]
+	[If, ( decBrush == 87 ),
+		[VarSet, decBrush, 78]
+		[VarSet, done, 1]
+	]
+	[If, ( decBrush == 92 ),
+		//[Note, "claytubeconstant brush"]
+		[VarSet, decBrush, 83]
+		[VarSet, done, 1]
+	]
+	// [If, ( decBrush ==  ),
+	// 	//[Note, "claytubeconstant brush"]
+	// 	[VarSet, decBrush, 83]
+	// 	[VarSet, done, 1]
+	// ]
+	[If, ( decBrush == 107 ),// && ( done == 0),
+		[VarSet, decBrush, 102]
+		[VarSet, done, 1]
+	]
+	[If, ( decBrush == 113 ),// && ( done == 0),
+		[VarSet, decBrush, 108]
+		[VarSet, done, 1]
+	]
+	[If, ( decBrush == 117 ),// && ( done == 0),
+		[VarSet, decBrush, 113]
+		[VarSet, done, 1]
+	]
+	[If, ( decBrush == 125 ),// && ( done == 0),
+		[VarSet, decBrush, 117]
+		[VarSet, done, 1]
+	]
+	[If, ( decBrush == 141 ),// && ( done == 0),
+		[VarSet, decBrush, 136]
+		[VarSet, done, 1]
+	]
+	[If, ( decBrush == 141 ),// && ( done == 0 ),
+		[VarSet, decBrush, 138]
+		[VarSet, done, 1]
+	]
+	[If, ( decBrush == 144 ),
+		[VarSet, decBrush, 141]
+		[VarSet, done, 1]
+	]
+	[If, ( done == 0 ),
+		[VarDec, decBrush]
+	]
+	//DEBUG
+	//[Note, decBrush,,.1]
+
+	[ISet, "Brush:Item Info", decBrush]
+]
+[RoutineDef, SelectNextBrush,
+	// docstring : 
+	// Select Next Brush when All brushes switch is on.
+	// 
+
+	[Varset, incBrush, [IGet,"Brush:ItemInfo"]]
+	[VarSet, done, 0]
+
+	[If, ( incBrush == 0 ),
+		[VarInc, incBrush]
+		[VarSet, done, 1]
+	]
+	[If, ( incBrush == 1 ) && ( done == 0),
+		[VarSet, incBrush,3]
+		[VarSet, done, 1]
+	]
+	[If, ( incBrush == 6 ),
+		[VarSet, incBrush, 8]
+		[VarSet, done, 1]
+	]
+	[If, ( incBrush == 10 ),
+		[VarSet, incBrush, 16]
+		[VarSet, done, 1]
+	]
+	[If, ( incBrush == 83 ),
+		[VarSet, incBrush, 92]
+		[VarSet, done, 1]
+	]
+	// [If, ( incBrush == 102 ),
+	// 	[VarSet, incBrush, 107]
+	// 	[VarSet, done, 1]		
+	// ]
+	[If, ( incBrush == 108 ) && ( done == 0),
+		[VarSet, incBrush, 113]
+		[VarSet, done, 1]
+	]
+	[If, ( incBrush == 113 ) && ( done == 0),
+		[VarSet, incBrush, 117]
+		[VarSet, done, 1]		
+	]
+	[If, ( incBrush == 117 ) && ( done == 0),
+		[VarSet, incBrush, 125]
+		[VarSet, done, 1]		
+	]
+	[If, ( incBrush == 135 ),
+		[VarSet, incBrush, 141]
+		[VarSet, done, 1]		
+	]
+	[If, ( incBrush == 141 ) && ( done == 0),
+		[VarSet, incBrush, 144]
+		[VarSet, done, 1]		
+	]
+
+	[If, ( done == 0 ),
+		[VarInc, incBrush]
+	]
+	//DEBUG
+	//[Note, incBrush]
+
+	[ISet, "Brush:Item Info", incBrush]
+]
+
+[RoutineDef, SelectPreviousBrushSet,
+
+	// what if the  mem block do not exists ?
+	[If, ( [Iget, "zplugin:zcycler pro:brush ID"] =< 0 )
+		,//cmds
+		[Exit]	
+	]
+
+	[If, ([Iget, "zplugin:zcycler pro:Set 01"] == 1) 
+		,//cmds
+		// [Note, "previous > Set 01"]
+
+		[VarSet, nk_cy_BrushSet, "zCycler_2020/data/BrushSet_01.zvr"]
+		//check if the mem block exists
+		[If,[MemGetSize,nk_cy_BrushSetState]
+			,//cmds
+			[MemDelete, nk_cy_BrushSetState]
+			,//else
+			[If, [FileExists,nk_cy_BrushSet]
+				,//cmds
+				[MemCreateFromFile,nk_cy_BrushSetState, nk_cy_BrushSet,]
+				// [Note, "uistate exists!",,1]
+				,//else
+				//create the memblock and save it to disk
+				[MVarDef,nk_cy_BrushSetState,13,127]
+				[MemSaveToFile,nk_cy_BrushSetState, nk_cy_BrushSet,1]//save file
+			]
+		]
+
+		[varset, brushID, [Iget, "zplugin:zcycler pro:Brush ID"]]
+		[VarDec, brushID] //+1
+		[VarSet, brush, [MVarGet, nk_cy_BrushSetState, brushID]]
+		[ISet, "Brush:Item Info", brush]
+		[ISet, "zplugin:zcycler pro:Brush ID", brushID]
+
+		//we don't need it so we delete
+		[MemDelete, nk_cy_BrushSetState]
+	]
+
+	[If, ([Iget, "zplugin:zcycler pro:Set 02"] == 1)
+		,//cmds
+		// [Note, "previous > Set 02"]
+
+		[VarSet, nk_cy_BrushSet, "zCycler_2020/data/BrushSet_02.zvr"]
+		//check if the mem block exists
+		[If,[MemGetSize,nk_cy_BrushSetState]
+			,//cmds
+			[MemDelete, nk_cy_BrushSetState]
+			,//else
+			[If, [FileExists,nk_cy_BrushSet]
+				,//cmds
+				[MemCreateFromFile,nk_cy_BrushSetState, nk_cy_BrushSet,]
+				// [Note, "uistate exists!",,1]
+				,//else
+				//create the memblock and save it to disk
+				[MVarDef,nk_cy_BrushSetState,13,127]
+				[MemSaveToFile,nk_cy_BrushSetState, nk_cy_BrushSet,1]//save file
+			]
+		]
+
+		[varset, brushID, [Iget, "zplugin:zcycler pro:Brush ID"]]
+		[VarDec, brushID] //+1
+		[VarSet, brush, [MVarGet, nk_cy_BrushSetState, brushID]]
+		[ISet, "Brush:Item Info", brush]
+		[ISet, "zplugin:zcycler pro:Brush ID", brushID]
+
+		//we don't need it so we delete
+		[MemDelete, nk_cy_BrushSetState]
+	]
+
+]
+
+[RoutineDef, SelectNextBrushSet,
+	[If, ( [Iget, "zplugin:zcycler pro:brush ID"] => 11 )
+		,//cmds
+		[Exit]	
+	]
+	[If, ([Iget, "zplugin:zcycler pro:Set 01"] == 1) 
+		,//cmds
+		// [Note, "next > Set 01"]
+		[VarSet, nk_cy_BrushSet, "zCycler_2020/data/BrushSet_01.zvr"]
+		//check if the mem block exists
+		[If,[MemGetSize,nk_cy_BrushSetState]
+			,//cmds
+			[MemDelete, nk_cy_BrushSetState]
+			,//else
+			[If, [FileExists,nk_cy_BrushSet]
+				,//cmds
+				[MemCreateFromFile,nk_cy_BrushSetState, nk_cy_BrushSet,]
+				// [Note, "uistate exists!",,1]
+				,//else
+				//create the memblock and save it to disk
+				[MVarDef,nk_cy_BrushSetState,13,127]
+				[MemSaveToFile,nk_cy_BrushSetState, nk_cy_BrushSet,1]//save file
+			]
+		]
+
+		[varset, brushID, [Iget, "zplugin:zcycler pro:Brush ID"]]
+		[VarInc, brushID] //+1
+		[VarSet, brush, [MVarGet, nk_cy_BrushSetState, brushID]]
+		[ISet, "Brush:Item Info", brush]
+		[ISet, "zplugin:zcycler pro:Brush ID", brushID]
+
+		//we don't need it so we delete
+		[MemDelete, nk_cy_BrushSetState]
+	]
+
+	[If, ([Iget, "zplugin:zcycler pro:Set 02"] == 1)
+		,//cmds
+		// [Note, "next > Set 02"]
+		[VarSet, nk_cy_BrushSet, "zCycler_2020/data/BrushSet_02.zvr"]
+		[If,[MemGetSize,nk_cy_BrushSetState]
+			,//cmds
+			[MemDelete, nk_cy_BrushSetState]
+			,//else
+			[If, [FileExists,nk_cy_BrushSet]
+				,//cmds
+				[MemCreateFromFile,nk_cy_BrushSetState, nk_cy_BrushSet,]
+				// [Note, "uistate exists!",,1]
+				,//else
+				//create the memblock and save it to disk
+				[MVarDef,nk_cy_BrushSetState,13,127]
+				[MemSaveToFile,nk_cy_BrushSetState, nk_cy_BrushSet,1]//save file
+			]
+		]
+
+		[varset, brushID, [Iget, "zplugin:zcycler pro:Brush ID"]]
+		[VarInc, brushID] //+1
+		[VarSet, brush, [MVarGet, nk_cy_BrushSetState, brushID]]
+		[ISet, "Brush:Item Info", brush]
+		[ISet, "zplugin:zcycler pro:Brush ID", brushID]
+
+		//we don't need it so we delete
+		[MemDelete, nk_cy_BrushSetState]
+	]
+	
+]
+
+// [RoutineDef, InitBrushSet,
+// 	[VarSet, ,[IGet, "zplugin:zcycler pro:Set 01"]]
+// 	//create the memblock
+// 	[If,[MemGetSize,nk_cy_BrushSetState]
+// 		,//cmds
+// 		,//else
+// 		[If, [FileExists,nk_cy_BrushSet]
+// 			,//cmds
+// 			[MemCreateFromFile,nk_cy_BrushSetState, nk_cy_BrushSet,]
+// 			// [Note, "uistate exists!",,1]
+// 			,//else
+// 			//create the memblock and save it to disk
+// 			[MVarDef,nk_cy_BrushSetState,12,127]
+// 			[MemSaveToFile,nk_cy_BrushSetState, nk_cy_BrushSet,1]//save file
+// 		]
+// 	]
+// ]
+
+// [RoutineDef, InitBrushSet02,
+
+// ]
+
+//create the memblock
+// [If,[MemGetSize,nk_cy_BrushSetState]
+// 	,//cmds
+// 	,//else
+// 	[If, [FileExists,nk_cy_BrushSet]
+// 		,//cmds
+// 		[MemCreateFromFile,nk_cy_BrushSetState, nk_cy_BrushSet,]
+// 		// [Note, "uistate exists!",,1]
+// 		,//else
+// 		//create the memblock and save it to disk
+// 		[MVarDef,nk_cy_BrushSetState,12,127]
+// 		[MemSaveToFile,nk_cy_BrushSetState, nk_cy_BrushSet,1]//save file
+// 	]
+// ]
+
+[RoutineDef, StoreBrushSet,
+
+	[VarDef, nk_cy_BrushSet, ""]
+	[If, [Iget, "zplugin:zcycler pro:Set 01"]
+		,//cmds
+		// [Note, "Set 01"]
+		[VarSet, nk_cy_BrushSet, "zCycler_2020/data/BrushSet_01.zvr"]
+	]
+	[If, [Iget, "zplugin:zcycler pro:Set 02"]
+		,//cmds
+		// [Note, "Set 02"]
+		[VarSet, nk_cy_BrushSet, "zCycler_2020/data/BrushSet_02.zvr"]
+	]	
+
+	[VarSet, brushID, [Iget, "zplugin:zcycler pro:Brush ID"]]
+
+	//create the memblock
+	[If,[MemGetSize,nk_cy_BrushSetState]
+		,//cmds
+		[MVarSet,nk_cy_BrushSetState, brushID, [IGet, "Brush:Item Info"]]
+		[MemSaveToFile,nk_cy_BrushSetState, nk_cy_BrushSet,1]//save file
+		,//else 
+		[If, [FileExists,nk_cy_BrushSet],
+			[MemCreateFromFile,nk_cy_BrushSetState, nk_cy_BrushSet,]
+			[MVarSet,nk_cy_BrushSetState, brushID, [IGet, "Brush:Item Info"]]
+			// [Note, "uistate exists!",,1]
+			,//else
+			[MVarDef,nk_cy_BrushSetState,13,127] //std brush
+			[MVarSet,nk_cy_BrushSetState, brushID, [IGet, "Brush:Item Info"]]
+			// [Note, "brush set has been created!",,1]
+
+		]
+		[MemSaveToFile,nk_cy_BrushSetState, nk_cy_BrushSet,1]//save file
+		[MemDelete, nk_cy_BrushSetState]
+	]
+]
+
+
+[RoutineDef, SelectPreviousTool,
+
+	[VarSet, decTool, [IGet,"Tool:Item Info"]]
+	[VarSet, done, 0]
+
+	[If, ([IGet, "Tool:Item Info"] == 31 ) // <30 = 2d Tools
+		,//cmds
+		//[Note, "sphere 3d"]
+		[VarSet, done, 1]
+		[Exit]
+	]
+	[If, ([IGet, "Tool:Item Info"] <= 48 ) //matcap is 47
+		,//cmds
+		[VarSet, decTool, 46]
+		[ISet, "Tool:Item Info", decTool]
+		[VarSet, done, 1]
+	]
+	[If, (done == 0)
+		,//cmds
+		[VarDec, decTool]
+		//[Note, incTool]
+		[ISet, "Tool:Item Info", decTool]
+	]
+
+]
+
+[RoutineDef, SelectNextTool,
+
+	[Varset, incTool, [IGet,"Tool:Item Info"]]
+	[VarSet, done, 0]
+
+	[If, ([IGet, "Tool:Item Info"] == 31 ) //Sphere3d
+		,//cmds
+		[VarInc, incTool]
+		[ISet, "Tool:Item Info", incTool]
+		[VarSet, done, 1]
+		
+	]
+	[If, ([IGet, "Tool:Item Info"] == 46 ) //matcap is 47
+		,//cmds
+		[VarSet, incTool, 48]
+		[ISet, "Tool:Item Info", incTool]
+		[VarSet, done, 1]
+	]
+	[If, (done == 0)
+		,//cmds
+		[VarInc, incTool]
+		//[Note, incTool]
+		[ISet, "Tool:Item Info", incTool]
+	]
+
+]
+
+[RoutineDef, SelectPreviousSubtool,
+	[If, ( [IGet, "Transform:Edit"] == 1 )
+		,//cmds
+		[If, ( [IsEnabled, "Tool:Subtool:SelectUp"] == 1 )
+			,//cmds
+			[IPress, "Tool:Subtool:SelectUp"]
+			,//else
+			//[Note, "First Subtool"]
+		]
+	]
+]
+[RoutineDef, SelectNextSubtool,
+	[If, ( [IGet, "Transform:Edit"] == 1 )
+		,//cmds
+		[If, ( [IsEnabled, "Tool:Subtool:SelectDown"] == 1 )
+			,//cmds
+			[IPress, "Tool:Subtool:SelectDown"]
+			,//else
+			//[Note, "Last Subtool"]
+		]
+	]
+	
+]
+
+[RoutineDef, SetSizeUp,
+	[VarSet, incSize, [IGet, "Zplugin:zcycler pro:Step"]]
+	[VarSet, size, [IGet, "Draw:Draw Size"]]
+	[ISet,  "Draw:Draw Size", size + incSize]
+	// [If, ( [IGet, "Transform:Edit"] == 1 )
+	// 	,//cmds
+	// ]
+]
+[RoutineDef, SetSizeDown,
+	[VarSet, decSize, [IGet, "Zplugin:zcycler pro:Step"]]
+	[VarSet, size, [IGet, "Draw:Draw Size"]]
+	[ISet,  "Draw:Draw Size", size - decSize]
+	// [If, ( [IGet, "Transform:Edit"] == 1 )
+	// 	,//cmds
+	// ]
+]
+
+[RoutineDef,HelpInterface,//main interface
+	[VarSet,backimage,"zCycler_2020/docs/pg1.psd"]
+	[VarSet,pageNo,1]//the page we're on
+	[VarSet,backOpacity,0.5]
+	[VarSet,backDisabled,1]
+	[VarSet,forwardOpacity,1]
+	[VarSet,forwardDisabled,0]
+	[VarSet,imageShow,1]
+	[VarSet,imageDisabled,0]
+		
+	[IFreeze,//makes operation smooth
+	[Loop,1000,//loop for selections, until Serve Now or Cancel choice ends loop
+	//draw the interface 
+
+		[If, pageNo == 1,
+			//show ZBrush 4R7 image
+			[VarSet,imageShow,0]
+			[VarSet,imageDisabled,1]
+			,//else
+			//don't show ZBrush 4R7 image
+			[VarSet,imageShow,0]
+			[VarSet,imageDisabled,1]
+		]
+
+		//background image - the other buttons are positioned relative to this
+		[NoteIButton, //text
+			,#backimage //image
+			,//pressed
+			,1	//disabled
+			,1 //HPos
+			,1 //VPos
+			,650 //HSize
+			,900 //VSize
+			,//color
+			,//text color
+			,0//opacity
+			,//text opacity
+			,1//image opacity
+			]
+
+		//forward & backward buttons
+		[NoteIButton, //text
+			,"zCycler_2020/docs/start.psd"//image
+			,//pressed
+			,backDisabled //disabled
+			,186 //HPos
+			,835 //VPos
+			,35 //HSize
+			,35 //VSize
+			,//color
+			,//text color
+			,0 //opacity
+			,0//text opacity
+			,backOpacity//image opacity
+		]
+		[NoteIButton, //text
+			,"zCycler_2020/docs/previous.psd" //image
+			,//pressed
+			,backDisabled //disabled
+			,234 //HPos
+			,835 //VPos
+			,35 //HSize
+			,35 //VSize
+			,//color
+			,//text color
+			,0//opacity
+			,//text opacity
+			,backOpacity //image opacity
+		]
+		
+		[NoteIButton, //text
+			,"zCycler_2020/docs/next.psd" //image
+			,//pressed
+			,forwardDisabled //disabled
+			,380 //HPos
+			,835 //VPos
+			,35 //HSize
+			,35 //VSize
+			,//color
+			,//text color
+			,0//opacity
+			,//text opacity
+			,forwardOpacity	//image opacity
+		]
+		[NoteIButton, //text
+			,"zCycler_2020/docs/last.psd" //image
+			,//pressed
+			,forwardDisabled//disabled
+			,428 //HPos
+			,835 //VPos
+			,35 //HSize
+			,35 //VSize
+			,//color	
+			,//text color	
+			,0 //opacity
+			,//text opacity	
+			,forwardOpacity//image opacity
+		]
+
+		//Z4R7 image button
+		[NoteIButton, //text
+			,"zCycler_2020/docs/Z4R7.psd" //image
+			,//pressed
+			,imageDisabled	//disabled?
+			,50 //HPos
+			,300//VPos
+			,500//HSize
+			,280//VSize
+			,//color
+			,//text color
+			,0//opacity
+			,//text opacity
+			,imageShow//image opacity
+		]
+
+		//exit button
+		[NoteIButton, //text
+			,"zCycler_2020/docs/exit.psd"//image
+			,//pressed
+			,0//disabled
+			,600//HPos
+			,15//VPos
+			,35//HSize
+			,35//VSize
+			,//color
+			,//text color
+			,0 //opacity
+			,0//text opacity
+			,1//image opacity
+		]
+
+
+		[VarSet,result,[Note,""]]//display & get result
+
+		//process result
+		[If, (result>=2)&&(result<=6),//choice results
+			[If, result == 2,//Start Page
+				[VarSet,pageNo,1]
+				[VarSet,backimage,"zCycler_2020/docs/pg1.psd"]
+				[VarSet,backOpacity,0.5]
+				[VarSet,backDisabled,1]
+				[VarSet,forwardOpacity,1]
+				[VarSet,forwardDisabled,0]
+			]
+			
+			[If, result == 3,//Previous
+				[Loop,1,
+					[If,pageNo == 2,
+						[VarDec,pageNo]
+						[VarSet,backOpacity,0.5]
+						[VarSet,backDisabled,1]
+						[VarSet,backimage,"zCycler_2020/docs/pg1.psd"]
+						[LoopExit]
+					]
+					[If,pageNo == 3,
+						[VarDec,pageNo]
+						[VarSet,forwardOpacity,1]
+						[VarSet,forwardDisabled,0]
+						[VarSet,backimage,"zCycler_2020/docs/pg2.psd"]
+						[LoopExit]
+					]
+					[If,pageNo == 4,
+						[VarDec,pageNo]
+						[VarSet,forwardOpacity,1]
+						[VarSet,forwardDisabled,0]
+						[VarSet,backimage,"zCycler_2020/docs/pg3.psd"]
+						[LoopExit]
+					]
+				]
+			]
+			
+			[If, result == 4,//Next
+				[Loop,1,
+					[If,pageNo == 1,
+						[VarInc,pageNo]
+						[VarSet,backOpacity,1]
+						[VarSet,backDisabled,0]
+						[VarSet,backimage,"zCycler_2020/docs/pg2.psd"]
+						[LoopExit]
+					]
+					[If,pageNo == 2,
+						[VarInc,pageNo]
+						[VarSet,forwardOpacity,1]
+						[VarSet,forwardDisabled,0]
+						[VarSet,backimage,"zCycler_2020/docs/pg3.psd"]
+						[LoopExit]
+					]
+					[If,pageNo == 3,
+						[VarInc,pageNo]
+						[VarSet,forwardOpacity,0.5]
+						[VarSet,forwardDisabled,1]
+						[VarSet,backimage,"zCycler_2020/docs/pg4.psd"]
+						[LoopExit]
+					]
+				]
+			]
+			[If, result == 5,//Last Page
+				[VarSet,pageNo,4]
+				[VarSet,forwardOpacity,0.5]
+				[VarSet,forwardDisabled,1]
+				[VarSet,backOpacity,1]
+				[VarSet,backDisabled,0]
+				[VarSet,backimage,"zCycler_2020/docs/pg4.psd"]
+			]
+			
+			[If, result == 6,//Z4R7 image
+				[LoopExit]//result will be handled outside the loop
+			]
+			,//else exit button or pressing Enter
+			
+			[LoopExit]//exits loop & interface
+			
+		]//end if result
+
+
+	]//end loop
+]//end freeze
+
+	[If, result == 6,//Z4R7 image
+		[Note,"\Cffa000You pressed the ZBrush 4R7 image button!",,3]
+	]
+
+]//HelpInterface routine end
+
+
+
+
+//Startup Routine must to run before the ui item definition
+[RoutineCall, Startup]
+
+// START UI
+[ISubPalette, "Zplugin:zCycler Pro", 1]
+
+[IButton, "Zplugin:zCycler Pro:Cycler Logo", "", 
+	[RoutineCall, HelpInterface]
+
+,,1,,"zCycler_2020/icons/zcycler_logo_h2.psd",0.35]
+
+
+[IButton, "Zplugin:zCycler Pro:Dual Brush Switcher", "",,1,1,,,.150]
+
+[IButton, "Zplugin:zCycler Pro:Cycle Brush", "Hotkey Me (ctrl+alt+click on me, then assign a key or combination of keys)).",
+	[IShowActions,0]
+	[RoutineCall, UpdateCycler]	
+,0,.5,,"zCycler_2020/icons/cycle.psd",0.25]
+
+[IButton, "Zplugin:zCycler Pro:Cycle Brush UI", "Edit Ui > drag and drop this item into your custom Ui, Then Assign the hotkey.",
+	[RoutineCall, UpdateCycler]	
+,0,.25,,"zCycler_2020/icons/cycle_s.psd",0.25]
+
+[IButton, "Zplugin:zCycler Pro:a.divider", "",,1,1,,"zCycler_2020/icons/divider.psd",.05]
+[IButton, "Zplugin:zCycler Pro:Master Brush Settings", "",,1,1,,,.150]
+
+[ISwitch, "Zplugin:zCycler Pro:Cycle On",
+	[MVarGet,nk_cy_uiSwitchesState,0]//enable
+	,"Enable or Disable Master brush controls."
+	,// when pressed
+	[RoutineCall, EnableCycleUI]
+	[MVarSet,nk_cy_uiSwitchesState,0,1]
+	[RoutineCall, UIStateToFile]
+	,// when unpressed
+	[RoutineCall, DisableCycleUI]
+	[MVarSet,nk_cy_uiSwitchesState,0,0]
+	[RoutineCall, UIStateToFile]
+,0,.375]
+
+[IButton, "Zplugin:zCycler Pro:Not Synced", "If you see that button it means the plugin as shutdown \nand the brushes changes cannot be tracked anymore. \nClick here to reenable the brushes tracking, \nor click on any zcycler button.",
+	[IShowActions,0]
+	[IHide, "Zplugin:zCycler Pro:Not Synced"]
+,0,.125,,"zCycler_2020/icons/sync.psd",.125]
+
+[ISwitch, "Zplugin:zCycler Pro:a.D",
+	[MVarGet,nk_cy_uiSwitchesState,1]
+	,"Toggle Dynamic Brush On / Off."
+	,// when pressed
+	[RoutineCall, DynamicOn]
+	[MVarSet,nk_cy_uiSwitchesState,1,1]
+	[RoutineCall, UIStateToFile]
+	,// when unpressed
+	[RoutineCall, DynamicOff]
+	[MVarSet,nk_cy_uiSwitchesState,1,0]
+	[RoutineCall, UIStateToFile]
+,0,.125
+]
+
+[ISwitch, "Zplugin:zCycler Pro:a.R",
+	[MVarGet,nk_cy_uiSwitchesState,2]
+	,"Reset Current and next selected brush."
+	,// when pressed
+	[If, ([IGet, "Zplugin:zCycler Pro:Cycle On"] == 0 )
+		,//cmds
+		[IPress, "Brush:Reset Current Brush"]
+	]
+	[IUnPress, "zplugin:zCycler Pro:a.U"]
+	[IPress, "Brush:Reset Current Brush"]
+	[MVarSet,nk_cy_uiSwitchesState,2,1]
+	[MVarSet,nk_cy_uiSwitchesState,3,0]//user mode
+	[RoutineCall, UIStateToFile]
+	,// when unpressed
+	[MVarSet,nk_cy_uiSwitchesState,2,0]
+	[RoutineCall, UIStateToFile]
+
+,0,.125]
+
+[ISwitch, "Zplugin:zCycler Pro:a.U",
+	[MVarGet,nk_cy_uiSwitchesState,3]
+	,"Toggle User Brush Mode On / Off."
+	,// when pressed
+
+	// TODO
+	// we check if the user brush exists within plugin data directory.
+	// We load the Brush If it exist, if not then advise the user then exit the process.
+	[RoutineCall, UserToDefaultSwitch2]
+
+	[IUnPress, "zplugin:zCycler Pro:a.R"]
+	[MVarSet,nk_cy_uiSwitchesState,2,0] //Reset mode
+	[MVarSet,nk_cy_uiSwitchesState,3,1]
+	[RoutineCall, UIStateToFile]
+	,// when unpressed
+	[RoutineCall, UserToDefaultSwitch2]
+
+	[MVarSet,nk_cy_uiSwitchesState,3,0]
+	[RoutineCall, UIStateToFile]
+
+,0,.125]
+
+[ISwitch, "Zplugin:zCycler Pro:a.Paint",
+	[MVarGet,nk_cy_uiSwitchesState,4]
+	,"Toggle RGB Draw mode for Brush On / Off."
+	,// when pressed
+	[MVarSet,nk_cy_uiSwitchesState,4,1]
+	[RoutineCall, UIStateToFile]
+	,// when unpressed
+	[MVarSet,nk_cy_uiSwitchesState,4,0]
+	[RoutineCall, UIStateToFile]
+
+,0,4/8]
+
+[ISwitch, "Zplugin:zCycler Pro:a.Sculpt",
+	[MVarGet,nk_cy_uiSwitchesState,5]
+	,"Toggle RGB Draw mode for Brush On / Off."
+	,// when pressed
+	[MVarSet,nk_cy_uiSwitchesState,5,1]
+	[RoutineCall, UIStateToFile]
+	,// when unpressed	
+	[MVarSet,nk_cy_uiSwitchesState,5,0]
+	[RoutineCall, UIStateToFile]
+,0,4/8]
+
+[ISwitch, "Zplugin:zCycler Pro:a.DSize",
+	[MVarGet,nk_cy_uiSwitchesState,6]
+	,"Apply Master value of Draw size for next brush selection."
+	,// when pressed
+	[MVarSet,nk_cy_uiSwitchesState,6,1]
+	[RoutineCall, UIStateToFile]
+	,// when unpressed
+	[MVarSet,nk_cy_uiSwitchesState,6,0]
+	[RoutineCall, UIStateToFile]
+,0,2/8]
+
+[ISwitch, "Zplugin:zCycler Pro:a.FShift",
+	[MVarGet,nk_cy_uiSwitchesState,7]
+	,"Apply Master value of Focal Shift to the next selected brush."
+	,// when pressed
+	[MVarSet,nk_cy_uiSwitchesState,7,1]
+	[RoutineCall, UIStateToFile]
+	,// when unpressed
+	[MVarSet,nk_cy_uiSwitchesState,7,0]
+	[RoutineCall, UIStateToFile]
+,0,2/8]
+
+[ISwitch, "Zplugin:zCycler Pro:a.Z Int",
+	[MVarGet,nk_cy_uiSwitchesState,8]
+	,"Apply Master value of the Z Intensity to next brush selection."
+	,// when pressed
+	[MVarSet,nk_cy_uiSwitchesState,8,1]
+	[RoutineCall, UIStateToFile]
+	,// when unpressed
+	[MVarSet,nk_cy_uiSwitchesState,8,0]
+	[RoutineCall, UIStateToFile]
+,0,2/8]
+
+[ISwitch, "Zplugin:zCycler Pro:a.RGB Int",
+	[MVarGet,nk_cy_uiSwitchesState,9]
+	,"Apply Master Value for the brush RGB Intensity to next brush selection."
+	,// when pressed
+	[MVarSet,nk_cy_uiSwitchesState,9,1]
+	[RoutineCall, UIStateToFile]
+	,// when unpressed
+	[MVarSet,nk_cy_uiSwitchesState,9,0]
+	[RoutineCall, UIStateToFile]
+,0,2/8]
+
+[ISwitch, "Zplugin:zCycler Pro:a.Alpha",
+	[MVarGet,nk_cy_uiSwitchesState,10]
+	,"Enable from brush to brush alpha texture portability."
+	,// when pressed
+	[MVarSet,nk_cy_uiSwitchesState,10,1]
+	[RoutineCall, UIStateToFile]
+	,// when unpressed
+	[MVarSet,nk_cy_uiSwitchesState,10,0]
+	[RoutineCall, UIStateToFile]
+,0,2/8]
+
+[ISwitch, "Zplugin:zCycler Pro:a.Stroke",
+	[MVarGet,nk_cy_uiSwitchesState,11]
+	,"Enable from brush to brush Stroke type portability."
+	,// when pressed
+	[MVarSet,nk_cy_uiSwitchesState,11,1]
+	[RoutineCall, UIStateToFile]
+	,// when unpressed
+	[MVarSet,nk_cy_uiSwitchesState,11,0]
+	[RoutineCall, UIStateToFile]
+,0,2/8]
+
+[ISwitch, "Zplugin:zCycler Pro:a.Wrap",
+	[MVarGet,nk_cy_uiSwitchesState,12]
+	,"Enable from brush to brush wrap mode."
+	,// when pressed
+	[MVarSet,nk_cy_uiSwitchesState,12,1]
+	[RoutineCall, UIStateToFile]
+	,// when unpressed
+	[MVarSet,nk_cy_uiSwitchesState,12,0]
+	[RoutineCall, UIStateToFile]
+,0,2/8]
+
+[IButton, "Zplugin:zCycler Pro:Save as User Brush", "",,1,.850,,,.125]
+
+[IButton, "Zplugin:zCycler Pro:Save User Brush", "Save Current brush as User brush to reload when User Mode is enable.",
+	[IShowActions,0]
+	[RoutineCall, SaveUserBrush]	
+,0,.150,,"zCycler_2020/icons/saveIcon.psd",.125]
+
+
+[IButton, "Zplugin:zCycler Pro:b.divider", "",,1,1,,"zCycler_2020/icons/divider.psd",.05]
+[IButton, "Zplugin:zCycler Pro:Mouse Wheel", "TODO",,1,1]
+[ISlider, "Zplugin:zcycler pro:Brush ID",0,1,0,11, "TODO.",,0,1/2]
+[ISlider, "Zplugin:zcycler pro:Step",1,1,0,50, "TODO.",,0,1/2]
+
+[IButton, "Zplugin:zCycler Pro:a.Previous Brush", "TODO",
+	
+	[VarSet, done, 0]
+
+	[If, [IGet, "zplugin:zcycler pro:Set 01"],
+		[RoutineCall, SelectPreviousBrushSet]
+		[VarSet, done, 1]
+	]
+	[If, [IGet, "zplugin:zcycler pro:Set 02"],
+		[RoutineCall, SelectPreviousBrushSet]
+		[VarSet, done, 1]
+	]
+
+,0,1/4,,"zCycler_2020/icons/previous.psd",1/4]
+
+[IButton, "Zplugin:zCycler Pro:a.Next Brush", "TODO",
+
+	[VarSet, done, 0]
+	[If, [IGet, "zplugin:zcycler pro:Set 01"],
+		[RoutineCall, SelectNextBrushSet]
+		[VarSet, done, 1]
+	]
+	[If, [IGet, "zplugin:zcycler pro:Set 02"],
+		[RoutineCall, SelectNextBrushSet]
+		[VarSet, done, 1]
+	]
+	
+,0,1/4,,"zCycler_2020/icons/next.psd",1/4]
+
+[IButton, "Zplugin:zCycler Pro:a.Store Brush", "TODO",
+	[RoutineCall, StoreBrushSet]
+,0,1/4,,"zCycler_2020/icons/store.psd",1/4]
+
+
+[ISwitch, "Zplugin:zCycler Pro:Set 01",
+	[MVarGet,nk_cy_uiSwitchesState,18]//enable
+	,"Enable switch to brush in brush Set "
+	,// when pressed
+	[IUnPress, "zplugin:zcycler pro:Set 02"]
+	[MVarSet,nk_cy_uiSwitchesState,13,1] //set 01
+	[MVarSet,nk_cy_uiSwitchesState,14,0] //set 02
+	[RoutineCall, UIStateToFile]
+	,// when unpressed
+	[MVarSet,nk_cy_uiSwitchesState,13,0]
+	[MVarSet,nk_cy_uiSwitchesState,14,1] //do nothing
+	[RoutineCall, UIStateToFile]
+	,0//disable
+//DO nothing
+,1/2
+]
+
+[ISwitch, "Zplugin:zCycler Pro:Set 02",
+	[MVarGet,nk_cy_uiSwitchesState,14]//enable
+	,"Enable switch to brush in brush Set "
+	,// when pressed
+	[IUnPress, "zplugin:zcycler pro:Set 01"]
+	[MVarSet,nk_cy_uiSwitchesState,14,1]
+	[MVarSet,nk_cy_uiSwitchesState,13,0]
+	[RoutineCall, UIStateToFile]
+	,// when unpressed
+	// [IPress, "zplugin:zcycler pro:Do Nothing"]
+	[MVarSet,nk_cy_uiSwitchesState,14,0]
+	[MVarSet,nk_cy_uiSwitchesState,13,1]
+	[RoutineCall, UIStateToFile]
+
+,0,1/2]
+
+
+[IButton, "Zplugin:zCycler Pro:c.divider", "", 
+,1,1,,"zCycler_2020/icons/divider.psd",.05]
+
+[IButton, "Zplugin:zCycler Pro:Modeling", "Utilities Section.", 
+,1,1]
+
+[IButton, "Zplugin:zCycler Pro:Sym Sync", ".",
+	[IShowActions,0]
+	[RoutineCall, SymmetrySyncing]	
+	,0//disable
+,.5,,,//0.125
+]
+
+[ISwitch, "Zplugin:zCycler Pro:a.SymSync",
+	[MVarGet,nk_cy_uiSwitchesState,15]
+	,"TODO"
+	,// when pressed
+	[RoutineCall, SymmetrySyncing]
+	[MVarSet,nk_cy_uiSwitchesState,15,1]
+	[RoutineCall, UIStateToFile]
+	,// when unpressed
+	// no need to sync again if we disable it.
+	//[RoutineCall, SymmetrySyncing]
+	[MVarSet,nk_cy_uiSwitchesState,15,0]
+	[RoutineCall, UIStateToFile]
+	,0//disable
+,.5
+]
+
+
+[IButton, "Zplugin:zCycler Pro:Smart Delete", "Smart delete hidden or lower subD or Subtool.",
+	[IShowActions,0]
+	
+	[If, ( [IsEnabled, "Tool:masking:Viewmask"] ) && ( [IsEnabled, "Tool:Visibility:Grow"] == 0 )
+		,//cmds
+		[IPress, "Tool:Subtool:SelectDown"]
+		[IPress, "Tool:Subtool:Delete"]
+	]
+	[If, ( [IsEnabled, "Tool:Visibility:Grow"] == 1 )
+		,//cmds
+		[IPress, "Tool:Geometry:Delete Hidden"]
+		[Note, "Delete Hidden geometry.",,.3]
+		[Exit]
+		
+	]
+	
+	// delete lower subds when sculptris brush mode is enable
+
+	[If, (( [IsEnabled, "Tool:Visibility:Grow"] == 0 ) && ([IGet, "Stroke:SculptrisPro"] == 1))
+		,//cmds
+		//no poly are hidden  then we delete the subtool
+		[IKeyPress, '2',[IPress,"Tool:Geometry:Del Lower"]]
+		[IPress, "Tool:Geometry:Del Lower"]
+		[Note, "Delete Lower Sub-Division.",,.3]
+		[Exit]
+	]
+
+
+	// if there is no hidden geo and sculptris pro brush mode are off, then if subtoolgetcount return 1 single subtool, we delete the subtool , or the tool. 
+	[If, (( [IsEnabled, "Tool:Visibility:Grow"] == 0 ) && ([IGet, "Stroke:SculptrisPro"] == 0) && ([IGet, "Tool:masking:Viewmask"] == 0))
+		,//cmds
+		//no poly are hidden  then we delete the subtool
+		[VarSet, subtoolcount, [SubtoolGetCount]]
+		[If, (subtoolcount == 1 ) 
+			,//cmds
+			//we delete the tool
+			[VarSet, msg, [MessageYesNo,"Delete the Tool ?","Delete the current Tool."]]
+			[If, (msg == 1)
+				,//cmds
+				[IKeyPress, '2',[IPress, "Tool:Subtool:Delete"]]
+			
+			]
+			[If, (msg == 0)
+				,//cmds
+				[Exit]
+			]
+			,//else
+			//we delete the current subtool
+			[VarSet, msg, [MessageYesNo,"Delete the current Subtools ?","Delete the current Subtool."]]
+			[If, (msg == 1)
+				,//cmds
+				[IKeyPress, '2',[IPress, "Tool:Subtool:Delete"]]		
+			]
+			[If, (msg == 0)
+				,//cmds
+				[Exit]
+			]
+		]
+	]
+,0,.5,,,.125]
+
+// [IButton, "Zplugin:zCycler Pro:aPM", "Append primitive, the fast way possible that match the scale of the current model.",
+// 	[IShowActions,0]
+// 	[RoutineCall, AppendPolyMesh]
+// 	,0//disable
+// ,.25,,,//0.125
+// ]
+
+[IButton, "Zplugin:zCycler Pro:2021a", "Plugin Version.",,1,.25,,,.15]
+
+[IButton, "Zplugin:zCycler Pro:a.Version", "Read The EULA", 
+	[VarSet,fullFilePath,[FileNameResolvePath,"zCycler_2020/EULA.txt"]]
+	[FileExecute,[Var,dllPath],"LaunchAppWithFile",fullFilePath]
+,,.75,,"zCycler_2020/icons/madeby.psd",.15]
+
+
+// Enable all switch after the ui item declaration.
+[RoutineCall, SetEnableSwitches]
+[RoutineCall, SetupUI]
+
+[VarDef, getDrawSize, [IGet,"Draw:Draw Size"]]
+[VarDef, getFocalShift, [IGet,"Draw:Focal Shift"]]
+[VarDef, getZIntensity, [IGet,"Draw:Z Intensity"]]
+[VarDef, getRGBIntensity, [IGet,"Draw:Rgb Intensity"]]
+[VarDef, getStrokeId, [IGet,"Stroke:Item Info"]]
+[VarDef, getAlphaId, [IGet,"Alpha:Item Info"]]
+[VarDef, getWrapMode, [IGet,"Brush:Curve:WrapMode"]]
+[VarSet, getZAdd, [IGet,"Draw:ZAdd"]]
+[VarSet, getZSub, [IGet,"Draw:ZSub"]]
+
+[Sleep,0.01,
+
+	[If,(result & 4 == 4)
+		,//cmds	
+		// cycler code
+		[VarSet, keyOnMouseDown,[IGet,"Preferences:Utilities:View Keyboard Status"]]
+		[VarSet, cycle1, [IGetID, "Zplugin:zCycler Pro:Cycle Brush"]]
+		[VarSet, cycle2, [IGetID, "Zplugin:zCycler Pro:Cycle Brush UI"]]
+
+		// on-the-fly dynamic (sure we need that ? it exists as gloabl vardef above)
+		[VarSet, dynWinId, [IGetID, "Zplugin:zCycler Pro:a.D"]]		
+		[VarSet, curBrushWinId, [IGetID, "Brush:Current Brush"]]
+
+		
+		[If, ( [Iget, "Transform:Edit"] == 0 )
+			,//cmds
+			[SleepAgain]
+			,//else
+			// symmetry syncing
+			[VarSet, xAxis, [IGetID, "Transform:>X<"]]
+			[VarSet, yAxis, [IGetID, "Transform:>Y<"]]
+			[VarSet, zAxis, [IGetID, "Transform:>Z<"]]
+		]
+		
+		[If, (winId == xAxis) || (winId == yAxis) || (winId == zAxis)
+			,//cmds			
+			[If, [IGet, "Zplugin:Zcycler pro:a.SymSync"]
+				,//cmds
+				// [Note, "Symmetry axis has changed !",,.25]
+				[RoutineCall, SymmetrySyncing]
+			]
+		]
+
+		[If, ( [Iget, "Zplugin:zCycler Pro:Cycle On"] == 0 )
+			,//cmds
+			[SleepAgain]
+		]
+
+		// is supposed to prevent from apply brush settings
+		// when we use the Dual Brush Switcher ( the two Interface Items)
+		[If, (winId == cycle1) && (winId == cycle2) //fix me : should be || instead of &&
+			,//cmds
+			//[Note, "Brush Cycler , sleep again !"]
+			[SleepAgain]
+		]
+
+		//[If, ((winId >= 16907) && (winId <= 17100))
+		//from ID 16908 (blob) to ID 16908 + 255  (17163)
+		[If, ((winId >= startBrush) && (winId <= endBrush))
+			,//cmds
+			[RoutineCall, UpdateDynamic]
+
+			[If, [Iget, "Zplugin:Zcycler Pro:a.Paint"]
+				,//cmds
+				[ISet, "Draw:Mrgb", getMrgb]
+				[ISet, "Draw:M", getMat]
+				[ISet, "Draw:Rgb", getRgb]
+				
+			]
+			[If, [Iget, "Zplugin:Zcycler Pro:a.Sculpt"]
+				,//cmds
+				[ISet, "Draw:ZAdd", getZAdd]
+				[ISet, "Draw:ZSub", getZSub]
+				
+			]
+			// Dilemna :
+			// 2018 remeber Draw Size for Brush  can handle that already.
+			// but can be usefull for R8 and R7 version of zbrush.			
+			[VarSet, zmodeler, [IGetTitle, "Brush:Current Brush",1]]
+			[VarSet, zmodeler, [StrExtract, zmodeler, 6, 128]]
+
+			[If, ( [StrFind, "ZModeler", zmodeler] == 0)// ( winId == zmodelerWinId )
+				,//cmds
+				,//else
+
+				[If, ( [Iget, "Zplugin:zCycler Pro:a.DSize"] == 1)
+					,//cmds
+				//	[Note, [StrMerge, "before :", getDrawSize]]
+					[ISet, "Draw:Draw Size", getDrawSize]
+					,//else
+				]
+				// Dilemna :
+				// focal Shift is remembered when switch from brush to brush.
+				// no more the need for that, except for R7 R8 user ?
+				[If, ( [Iget, "Zplugin:zCycler Pro:a.FShift"] == 1)
+					,//cmds
+					[ISet, "Draw:Focal Shift", getFocalShift]
+					,//else
+				]
+
+				// Dilemna :
+				// Z Intensity is remembered when switch from brush to brush.
+				// no more the need for that, except for R7 R8 user ?
+				[If, ( [Iget, "Zplugin:zCycler Pro:a.Z Int"] == 1),
+					[ISet, "Draw:Z Intensity", getZIntensity]
+				]
+				[If, ( [Iget, "Zplugin:zCycler Pro:a.RGB Int"] == 1),
+					[ISet, "Draw:Rgb Intensity", getRgbIntensity]
+				]
+				[If, ( [Iget, "Zplugin:zCycler Pro:a.Alpha"] == 1),
+					[ISet, "Alpha:Item Info", getAlphaId]
+				]
+				[If, ( [Iget, "Zplugin:zCycler Pro:a.Wrap"] == 1),
+					[ISet, "Brush:Curve:Wrap Mode", getWrapMode]
+				]
+				[If, ( [Iget, "Zplugin:zCycler Pro:a.Stroke"] == 1),
+					[ISet, "Stroke:Item Info", getStrokeId]
+				]
+				[If, ( [Iget, "Zplugin:zCycler Pro:a.R"] == 1),
+					[IPress, "Brush:Reset Current Brush"]
+				]				
+				[If, ( [Iget, "Zplugin:zCycler Pro:a.U"] == 1),
+					[RoutineCall, UserToDefaultSwitch2]
+				]
+			]
+		]
+
+		[If, ( wait == 1 )
+			,//cmds
+			[If, DEBUG, [Note, "wait mode was set ON",,.5],,-1]
+			
+			[If, ( waitBrush != [IGet,"Brush:Item Info"] )
+				,//cmds
+				[If, DEBUG, [Note, "Wait mode is ON\n The brush don't match waitBrush !!!",,-1]]
+
+				[VarSet, waitBrush,[IGet,"Brush:Item Info"]]
+				[IModSet, "Draw:Draw Size", [Iget, "zplugin:zcycler Pro:a.D"]]
+				
+				[If, [IGet, "Zplugin:Zcycler Pro:a.Paint"],
+					[ISet, "Draw:Mrgb", getMrgb]
+					[ISet, "Draw:M", getMat]
+					[ISet, "Draw:Rgb", getRgb]
+				]
+				[If, [IGet, "Zplugin:Zcycler Pro:a.Sculpt"],
+					[ISet, "Draw:ZAdd", getZAdd]
+					[ISet, "Draw:ZSub", getZSub]				
+				]
+
+				[VarSet, zmodeler, [IGetTitle, "Brush:Current Brush",1]]
+				[VarSet, zmodeler, [StrExtract, zmodeler, 6, 128]]
+				
+				//Update Zmodeler Draw Size
+				[If, ( [StrFind, "ZModeler", zmodeler] == 0),,
+					// ..else
+					[If, ( [Iget, "Zplugin:zCycler Pro:a.DSize"] == 1 ),
+						[ISet, "Draw:Draw Size", getDrawSize]
+					]
+					[If, ( [Iget, "Zplugin:zCycler Pro:a.FShift"] == 1),
+						[ISet, "Draw:Focal Shift", getFocalShift]
+					]
+					[If, ( [Iget, "Zplugin:zCycler Pro:a.Z Int"] == 1),
+						[ISet, "Draw:Z Intensity", getZIntensity]
+					]
+					[If, ( [Iget, "Zplugin:zCycler Pro:a.RGB Int"] == 1),
+						[ISet, "Draw:Rgb Intensity", getRgbIntensity]
+					]
+					[If, ( [Iget, "Zplugin:zCycler Pro:a.Alpha"] == 1),
+						[ISet, "Alpha:Item Info", getAlphaId]
+					]
+					[If, ( [Iget, "Zplugin:zCycler Pro:a.Wrap"] == 1),
+						[ISet, "Brush:Curve:Wrap Mode", getWrapMode]
+					]
+					[If, ( [Iget, "Zplugin:zCycler Pro:a.R"] == 1),
+						[IPress, "Brush:Reset Current Brush"]
+					]
+					[If, ( [Iget, "Zplugin:zCycler Pro:a.Stroke"] == 1),
+						[ISet, "Stroke:Item Info", getStrokeId]
+					]
+					[If, ( [Iget, "Zplugin:zCycler Pro:a.U"] == 1),
+						[RoutineCall, UserToDefaultSwitch2]
+					]
+				]
+				
+				// Do not forget to reset the Wait mode
+				[VarSet, wait, 0]
+			]
+			,//else
+			[If, DEBUG,
+				[Note, "wait mode is OFF",,-1]
+			]
+		]
+		//[If, ((winId != 30501) && ( wait == 1 ))
+		// We reset the wait mode if the second click do not change the current brush.
+		[If, (( wait == 1 ) && (winId != curBrushWinId)),
+			[VarSet, wait, 0]
+			[Note, "wait mode was ON, but current brush id don't match, \nAborted.."]
+		]
+
+
+		//[If, ( winId == 30501) //the brush:current brush winId
+		[If, ( winId == curBrushWinId),
+			[VarSet, wait, 1]
+			[If, DEBUG,	[Note, "Enable wait mode",,.2]]			
+		]
+
+		// what is this ?
+		// Collect the latest brush settings
+		[VarSet, getDrawSize, [IGet,"Draw:Draw Size"]]
+		//[Note, [StrMerge, "new DSize value :",getDrawSize]]
+		[VarSet, getFocalShift, [IGet,"Draw:Focal Shift"]]			
+		[VarSet, getZIntensity, [IGet,"Draw:Z Intensity"]]
+		[VarSet, getRGBIntensity, [IGet,"Draw:Rgb Intensity"]]
+		[VarSet, getWrapMode, [IGet,"Brush:Curve:WrapMode"]]
+		[VarSet, getStrokeId, [IGet,"Stroke:Item Info"]]
+		[VarSet, getAlphaId, [IGet,"Alpha:Item Info"]]
+
+		[VarSet, getZAdd, [IGet,"Draw:ZAdd"]]
+		[VarSet, getZSub, [IGet,"Draw:ZSub"]]
+		[VarSet, getMrgb, [IGet,"Draw:MRgb"]]
+		[VarSet, getRgb, [IGet,"Draw:Rgb"]]
+		[VarSet, getMat, [IGet,"Draw:M"]]
+
+	]
+	[If,(result & 8 == 8) // Lbutton Up
+		,//cmds
+		[If, DEBUG, [Note, "LButton Up !"]]
+	]
+	
+	// Key down
+	[If,(result & 16 == 16)
+		,//cmds
+		//[Note, "Key Down event",,.2]
+		// do we access brush popup picker from keyboard ?
+		// then we guess the user with pick by 
+		// clicking with mouse device and not keyboard shortcuts
+		[If, ( [IGet,"Preferences:Utilities:View Keyboard Status"] == 81 )
+			,//cmds
+			[Note, "Brush picker hotkey pressed",,.2]
+			[VarSet, wait, 1]
+			[ISet, "Preferences:Utilities:View Keyboard Status", 13]//Reset
+			,//else
+			[VarSet, wait, 0]//should we reset ?
+		]
+	]
+
+	// [If,(result & 32 == 32)
+	// 	,//cmds
+	// 	[Note, "Key Up event",,-1]
+	// ]
+
+	[If,(result & 256 == 256)
+		,//cmds	
+		// [Note, "startup !"]	
+		[IHide, "Zplugin:zCycler Pro:Not Synced"]
+
+	]
+	[If,(result & 512 == 512)
+		,//cmds
+		// [Note, "shutdown !"]
+		[IShow, "Zplugin:zCycler Pro:Not Synced"]
+	]
+	[SleepAgain]	
+, 4 | 16 | 32 | 256 | 512
+,result,winId]
